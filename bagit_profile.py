@@ -402,6 +402,28 @@ class Profile(object):  # pylint: disable=useless-object-inheritance
                 )
         return True
 
+    # For each member of self.profile['Payload-Files-Required'], throw an exception if
+    # the path does not exist.
+    def validate_payload_files_required(self, bag):
+        # Tag files are optional, so we return True if none are defined in the profile.
+        if "Payload-Files-Required" not in self.profile:
+            return True
+        for payload_file in self.profile["Payload-Files-Required"]:
+            if not payload_file.startswith("data/"):
+                self._fail(
+                    "%s: Required payload file '%s' not in payload directory data/"
+                    % (bag, payload_file)
+                )
+                continue
+            path_to_payload_file = join(bag.path, payload_file)
+            
+            if not exists(payload_file):
+                self._fail(
+                    "%s: Required payload file '%s' is not present in Bag."
+                    % (bag, path_to_payload_file)
+                )
+        return True    
+
     # Check to see if this constraint is False, and if it is, then check to see
     # if the fetch.txt file exists. If it does, throw an exception.
     def validate_allow_fetch(self, bag):

@@ -4,6 +4,7 @@ import sys
 from os.path import isdir, join
 from shutil import copytree, rmtree
 from unittest import TestCase, main
+from tempfile import TemporaryDirectory
 
 from bagit import Bag
 from bagit_profile import Profile, ProfileValidationError, find_tag_files
@@ -54,6 +55,57 @@ class TagFilesAllowedTest(TestCase):
         self.assertFalse(result)
         self.assertEqual(len(profile.report.errors), 1)
         self.assertTrue("Existing tag file" in profile.report.errors[0].value)
+
+
+class TagFilesAllowedTest(TestCase):
+    def tearDown(self):
+        if isdir(self.bagdir):
+            rmtree(self.bagdir)
+
+    def setUp(self):
+        self.bagdir = TemporaryDirectory(prefix="bagit-profile-test-bagdir")
+        self.payload = join(self.bagdir, "data")
+        copytree("./fixtures/test-tag-files-allowed/bag", self.bagdir)
+        with open(join("./fixtures/test-tag-files-allowed/profile.json"), "r") as f:
+            self.profile_dict = json.loads(f.read())
+
+    def test_not_given(self):
+        profile = Profile("TEST", self.profile_dict)
+        bag = Bag(self.bagdir)
+        result = profile.validate(bag)
+        self.assertTrue(result)
+ 
+    def test_required_allowed(self):
+        self.profile_dict["Payload-Files-Allowed"] = ["data/f*"]
+        self.profile_dict["Payload-Files-Required"] = ["data/foo"]
+        with open(join(self.payload, "foo"), "w"):
+            pass
+        profile = Profile("TEST", self.profile_dict)
+        result = profile.validate(Bag(self.bagdir))
+        self.assertTrue(result)
+        self.assertFalse(result)
+        self.assertEqual(len(profile.report.errors), 0)
+
+    def test_required_not_allowed(self):
+        self.profile_dict["Payload-Files-Allowed"] = ["data/bar"]
+        self.profile_dict["Payload-Files-Required"] = ["data/foo"]
+        with open(join(self.payload, "foo"), "w"):
+            pass
+        profile = Profile("TEST", self.profile_dict)
+        result = profile.validate(Bag(self.bagdir))
+        self.assertFalse(result)
+        self.assertEqual(len(profile.report.errors), 1)
+        self.assertTrue("Required payload files" in profile.report.errors[0].value)
+
+    def test_existing_not_allowed(self):
+        self.profile_dict["Payload-Files-Allowed"] = ["data/bar"]
+        with open(join(self.payload, "foo"), "w"):
+            pass
+        profile = Profile("TEST", self.profile_dict)
+        result = profile.validate(Bag(self.bagdir))
+        self.assertFalse(result)
+        self.assertEqual(len(profile.report.errors), 1)
+        self.assertTrue("Existing payload file" in profile.report.errors[0].value)
 
 
 class BagitProfileIgnoreBagInfoTagNameCapitalizationTests(TestCase):
